@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Vowels Recognition</title>
+    <link rel="stylesheet" href="/static/style.css"> 
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo"> Vowels in Indian Sign Language</div>
+    </nav>
+    <header class="hero">
+        <h1>Hand Letter Recognition</h1>
+        <p>For optimal sign language detection, ensure you're in a well-lit environment with a plain, contrasting background. </p>
+        <p>Critically, don't show your face to avoid interference, and make sure your entire signing space is visible within the frame.</p>
+    </header>
+    <div class="container">
+        <div class="modes">
+            <button id="webcamBtn" class="active">🎥 Webcam Mode</button>
+            <button id="uploadBtn">📁 Upload Image</button>
+        </div>
+        <div id="webcamMode" class="mode-content">
+            <div class="video-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            <button id="captureBtn">📸 Capture & Predict</button>
+            <div id="webcamResult" class="result-card"></div>
+        </div>
+        <div id="uploadMode" class="mode-content" style="display:none;">
+            <form id="uploadForm" enctype="multipart/form-data"> 
+                <input type="file" id="imageInput" name="image" accept="image/*">
+                <button type="submit">🔍 Upload & Predict</button>
+            </form>
+            <div id="uploadResult" class="result-card"></div>
+            
+            <div id="processedImageContainer" class="image-container" style="display: none;">
+                <h3>Processed Image</h3>
+                <img id="processedImage" src="" alt="Processed">
+                <p class="letter-result">Detected Sign: <strong id="letterResult"></strong></p>
+            </div>
+            <p id="uploadMessage" class="message" style="display: none;"></p> 
+        </div>
+    </div>
+    <footer>
+        <p>© 2025 LetterAI. All rights reserved.</p>
+    </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const webcamBtn = document.getElementById('webcamBtn');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const webcamMode = document.getElementById('webcamMode');
+            const uploadMode = document.getElementById('uploadMode');
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const captureBtn = document.getElementById('captureBtn');
+            const webcamResult = document.getElementById('webcamResult');
+            const uploadForm = document.getElementById('uploadForm');
+            const imageInput = document.getElementById('imageInput');
+            const uploadResult = document.getElementById('uploadResult');
+            
+            const processedImageContainer = document.getElementById('processedImageContainer');
+            const processedImage = document.getElementById('processedImage');
+            const letterResult = document.getElementById('letterResult');
+            const uploadMessage = document.getElementById('uploadMessage'); 
+
+            
+
+            // Switch between modes
+            webcamBtn.addEventListener('click', function() {
+                this.classList.add('active');
+                uploadBtn.classList.remove('active');
+                webcamMode.style.display = 'block';
+                uploadMode.style.display = 'none';
+                resetUploadMode(); 
+                startWebcam();
+            });
+
+            uploadBtn.addEventListener('click', function() {
+                this.classList.add('active');
+                webcamBtn.classList.remove('active');
+                webcamMode.style.display = 'none';
+                uploadMode.style.display = 'block';
+                stopWebcam();
+                resetWebcamMode(); 
+            });
+
+            // Webcam functionality
+            let stream = null;
+
+            function startWebcam() {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    // Request specific resolution (320x240)
+                    navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } }) 
+                    .then(function(mediaStream) {
+                        stream = mediaStream;
+                        video.srcObject = mediaStream;
+                        video.onloadedmetadata = () => {
+                            // Ensure canvas matches video dimensions once video metadata is loaded
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        };
+                    })
+                    .catch(function(error) {
+                        webcamResult.textContent = "Error accessing webcam. Please ensure you've granted camera permissions. Error: " + error.message;
+                        console.error("Webcam access error:", error);
+                    });
+                } else {
+                    webcamResult.textContent = "Webcam access not supported in your browser.";
+                }
+            }
+
+            function stopWebcam() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    video.srcObject = null; // Clear video stream
+                }
+            }
+
+            function resetWebcamMode() {
+                webcamResult.innerHTML = '';
+            }
+
+            function resetUploadMode() {
+                processedImageContainer.style.display = 'none';
+                processedImage.src = '';
+                letterResult.textContent = '';
+                uploadMessage.style.display = 'none';
+                uploadMessage.textContent = '';
+                imageInput.value = ''; // Clear selected file in the input
+                uploadResult.innerHTML = '';
+            }
+
+            // Capture and predict for webcam
+            captureBtn.addEventListener('click', async function() {
+                if (!stream) {
+                    webcamResult.textContent = "Webcam not active. Please start webcam mode.";
+                    return;
+                }
+
+                // Ensure canvas size matches video before drawing
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                webcamResult.innerHTML = "⏳ Predicting sign..."; // Updated text
+                webcamResult.classList.add('animate');
+                
+                try {
+                    // Convert canvas content to a Blob (image file format)
+                    canvas.toBlob(async (blob) => {
+                        const formData = new FormData();
+                        formData.append('image', blob, 'capture.jpg'); // Append as a file named 'capture.jpg'
+                        
+                        // Send the image blob to the Flask backend's /predict endpoint
+                        const response = await fetch('/predict', { 
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json(); // Parse the JSON response from the server
+
+                        if (response.ok) {
+                            if (result.letter) {
+                                webcamResult.innerHTML = `
+                                    <span style="font-size:2rem;">${result.letter}</span><br>
+                                    <b>Detected Sign:</b> ${result.letter}
+                                `;
+                            } else {
+                                // This block handles cases where server indicates no detection or an issue
+                                webcamResult.textContent = result.error || "No hand sign detected. Please try again.";
+                            }
+                        } else {
+                            // Handle HTTP errors (e.g., 500 server error, 400 bad request)
+                            webcamResult.textContent = result.error || "Error predicting sign. Please try again.";
+                            console.error("Server error response:", result);
+                        }
+                    }, 'image/jpeg', 0.9); // Specify image type and quality
+                } catch (error) {
+                    console.error("Client-side prediction error:", error);
+                    webcamResult.textContent = `Client-side error: ${error.message}. Check console for details.`;
+                } finally {
+                    // Remove animation class after a short delay
+                    setTimeout(() => webcamResult.classList.remove('animate'), 600);
+                }
+            });
+
+            // Handle image upload and predict
+            uploadForm.addEventListener('submit', async function(event) {
+                event.preventDefault(); // Prevent default form submission (which would reload the page)
+
+                resetUploadMode(); // Clear any previous results or messages
+
+                const formData = new FormData(this); // 'this' refers to the form itself
+
+                if (!imageInput.files || imageInput.files.length === 0) {
+                    uploadMessage.style.display = 'block';
+                    uploadMessage.textContent = 'Please select an image file.';
+                    return;
+                }
+
+                uploadResult.innerHTML = "⏳ Uploading and Predicting...";
+                uploadResult.classList.add('animate');
+
+                try {
+                    // Send the uploaded file to the Flask backend's /upload endpoint
+                    const response = await fetch('/upload', { 
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        if (result.letter) {
+                            // Display the processed image and the prediction
+                            processedImageContainer.style.display = 'block';
+                            processedImage.src = result.processed_image; // Server provides the path to the image
+                            letterResult.textContent = result.letter;
+                            uploadResult.innerHTML = `
+                                <span style="font-size:2rem;">${result.letter}</span><br>
+                                <b>Detected Sign:</b> ${result.letter}
+                            `;
+                        } else {
+                            // If server says no letter detected (even if response is OK)
+                            uploadMessage.style.display = 'block';
+                            uploadMessage.textContent = result.error || "No hand sign detected in the uploaded image.";
+                            uploadResult.innerHTML = ''; // Clear result card if no letter
+                        }
+                    } else {
+                        // Handle server errors for upload
+                        uploadMessage.style.display = 'block';
+                        uploadMessage.textContent = result.error || "Error processing uploaded image.";
+                        uploadResult.innerHTML = '';
+                        processedImageContainer.style.display = 'none'; // Hide image container on error
+                        console.error("Server error response (upload):", result);
+                    }
+                } catch (error) {
+                    console.error("Client-side upload/prediction error:", error);
+                    uploadMessage.style.display = 'block';
+                    uploadMessage.textContent = `Client-side error during upload: ${error.message}. Check console for details.`;
+                    uploadResult.innerHTML = '';
+                    processedImageContainer.style.display = 'none'; 
+                } finally {
+                    setTimeout(() => uploadResult.classList.remove('animate'), 600);
+                }
+            });
+            
+            // Initial setup - start webcam when the page loads
+            startWebcam(); 
+        });
+    </script>
+</body>
+</html>
