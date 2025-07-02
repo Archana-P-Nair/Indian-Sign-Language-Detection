@@ -13,8 +13,11 @@ ISL Detection is a beginner-friendly tool that uses machine learning to spot ISL
 
 ## 🎯 Why It’s So Cool:
 🕹️ Real-Time Magic: See your hand signs become ISL letters instantly! 🚀
+
 📱 Super Easy: Use your webcam or upload a photo—no tech wizardry needed! 🧙‍♂️
+
 🤝 Inclusive Vibes: Helps connect with over 7 million Deaf folks in India. 💬
+
 🛠️ Make It Yours: Tools to create and train your own dataset. 🧠
 
 ## What’s in the Box? 📦
